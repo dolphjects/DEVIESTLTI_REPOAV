@@ -55,20 +55,7 @@ async function getStudents(courseId) {
     'type[]': 'StudentEnrollment',
     'state[]': 'active'
   });
-  
-  // Aquí aplicamos la censura
-  let counter = 1;
-  return list.map(e => {
-    const fakeId = String(counter).padStart(5, '0'); // Rellena con ceros a la izquierda: 00001, 00002...
-    const fakeName = `Alumno ${counter}`;
-    counter++;
-    
-    return { 
-      id: e.user.id, // Conservamos el ID interno de Canvas para que el fetch de módulos siga funcionando
-      name: fakeName, 
-      sis_user_id: fakeId 
-    };
-  });
+  return list.map(e => ({ id: e.user.id, name: e.user.name, sis_user_id: e.user.sis_id || e.sis_user_id }));
 }
 
 async function getModulesForStudent(courseId, studentId) {
