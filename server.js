@@ -417,3 +417,4 @@ web.get('/course-details', async (req, res) => {
   console.error('❌ Error al iniciar la app:', err);
   process.exit(1);
 });
+//SE HIZO EL REGRESO A NOMBRE Y IDIEST
