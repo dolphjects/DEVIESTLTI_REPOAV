@@ -27,7 +27,7 @@ jobs:
         run: |
           npm install
           npm run build --if-present
-          
+          npm run test --if-present
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -52,5 +52,4 @@ jobs:
           app-name: 'ditelti'
           slot-name: 'Production'
           package: .
-
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_86A1DD9783F44F68B4F9612E8730B1D8 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D5EEA6202F0F49EC8F7E06336DA31B5C }}
