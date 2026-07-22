@@ -719,6 +719,16 @@ web.get('/course-details', async (req, res) => {
   host.enable('trust proxy');
   host.use(express.static(path.join(__dirname, 'public')));
   host.use('/', lti.app);
+
+  // Ltijs puede agregar COEP: require-corp mediante su middleware de seguridad.
+  // Ese encabezado bloquea reproductores externos como Vimeo dentro del reporte.
+  // La aplicación no utiliza funciones que requieran aislamiento entre orígenes,
+  // por lo que se elimina antes de entregar las vistas y APIs propias.
+  host.use((req, res, next) => {
+    res.removeHeader('Cross-Origin-Embedder-Policy');
+    next();
+  });
+
   host.use('/', web);
 
   host.listen(PORT, () => {
