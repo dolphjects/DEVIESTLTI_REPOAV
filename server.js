@@ -64,6 +64,114 @@ function normalizeRole(value) {
   return 'teacher';
 }
 
+/**
+ * Resuelve primero los roles enviados en el lanzamiento LTI.
+ * Los roles con privilegios de edición tienen prioridad sobre Learner/Student.
+ */
+function resolveRoleFromLtiRoles(roles = [], fallbackRole = 'teacher') {
+  const normalizedRoles = roles.map(role => String(role || '').toLowerCase());
+
+  const hasTeacherRole = normalizedRoles.some(role =>
+    role.includes('instructor') ||
+    role.includes('administrator') ||
+    role.includes('teachingassistant') ||
+    role.includes('contentdeveloper') ||
+    role.includes('faculty') ||
+    role.includes('teacher')
+  );
+
+  if (hasTeacherRole) return 'teacher';
+
+  const hasStudentRole = normalizedRoles.some(role =>
+    role.includes('learner') || role.includes('student')
+  );
+
+  if (hasStudentRole) return 'student';
+  return normalizeRole(fallbackRole);
+}
+
+/**
+ * Consulta las inscripciones del usuario dentro del curso actual.
+ * Así evitamos determinar el rol con base en otros cursos del usuario.
+ *
+ * Prioridad cuando existen varias inscripciones en el mismo curso:
+ * Teacher / TA / Designer > Student.
+ */
+async function resolveRoleForCourse(courseId, userId, options = {}) {
+  const {
+    ltiRoles = [],
+    fallbackRole = 'teacher'
+  } = options;
+
+  const fallback = resolveRoleFromLtiRoles(ltiRoles, fallbackRole);
+
+  if (!CANVAS_TOKEN || !courseId || !userId) {
+    return fallback;
+  }
+
+  try {
+    const enrollments = await getAll(
+      `/courses/${encodeURIComponent(courseId)}/enrollments`,
+      {
+        user_id: userId,
+        'state[]': ['active', 'invited', 'completed']
+      }
+    );
+
+    const enrollmentTypes = new Set(
+      enrollments.map(enrollment => String(enrollment.type || ''))
+    );
+
+    const enrollmentRoles = enrollments
+      .flatMap(enrollment => [enrollment.type, enrollment.role])
+      .filter(Boolean)
+      .map(role => String(role).trim().toLowerCase());
+
+    const hasTeacherEnrollment =
+      enrollmentTypes.has('TeacherEnrollment') ||
+      enrollmentTypes.has('TaEnrollment') ||
+      enrollmentTypes.has('DesignerEnrollment') ||
+      enrollmentRoles.some(role =>
+        role.includes('teacher') ||
+        role.includes('instructor') ||
+        role.includes('profesor') ||
+        role.includes('maestro') ||
+        role.includes('auxiliar') ||
+        role.includes('designer')
+      );
+
+    if (hasTeacherEnrollment) {
+      return 'teacher';
+    }
+
+    const hasStudentEnrollment =
+      enrollmentTypes.has('StudentEnrollment') ||
+      enrollmentTypes.has('StudentViewEnrollment') ||
+      enrollmentRoles.some(role =>
+        role.includes('student') ||
+        role.includes('learner') ||
+        role.includes('estudiante') ||
+        role.includes('alumno')
+      );
+
+    if (hasStudentEnrollment) {
+      return 'student';
+    }
+
+    console.warn(
+      `No se encontró una inscripción reconocida para el usuario ${userId} en el curso ${courseId}. ` +
+      `Se utilizará el rol LTI: ${fallback}.`
+    );
+  } catch (error) {
+    console.warn(
+      `No se pudo verificar el rol del usuario ${userId} en el curso ${courseId}: ${error.message}. ` +
+      `Se utilizará el rol LTI: ${fallback}.`
+    );
+  }
+
+  return fallback;
+}
+
 function clampPercent(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
@@ -419,13 +527,25 @@ web.get('/', (req, res) => {
 
 web.get('/report', async (req, res) => {
   const courseId = req.query.course_id;
-  const role = normalizeRole(req.query.role);
+  const userId = req.query.user_id;
+  const requestedRole = normalizeRole(req.query.role);
 
   if (!courseId) {
     return res.status(400).send('No se recibió course_id.');
   }
 
   try {
+    const role = userId
+      ? await resolveRoleForCourse(courseId, userId, { fallbackRole: requestedRole })
+      : requestedRole;
+
+    // Corrige URLs antiguas o manipuladas para que frontend y API utilicen el mismo rol.
+    if (role !== requestedRole) {
+      const correctedQuery = new URLSearchParams(req.query);
+      correctedQuery.set('role', role);
+      return res.redirect(`/report?${correctedQuery.toString()}`);
+    }
+
     const course = await getCourseDetails(courseId);
     const version = resolveReportVersion({
       courseId,
@@ -438,18 +558,25 @@ web.get('/report', async (req, res) => {
   } catch (error) {
     console.error('Error resolviendo la vista:', error.message);
     const fallbackVersion = normalizeVersion(req.query.version, 'basic');
-    return res.sendFile(path.join(__dirname, 'views', REPORT_VIEWS[role][fallbackVersion]));
+    return res.sendFile(path.join(__dirname, 'views', REPORT_VIEWS[requestedRole][fallbackVersion]));
   }
 });
 
 web.get('/api/report-data', async (req, res) => {
   const { course_id: courseId, user_id: userId } = req.query;
-  const role = normalizeRole(req.query.role);
+  const requestedRole = normalizeRole(req.query.role);
 
   if (!courseId) return res.status(400).json({ error: 'Falta course_id.' });
-  if (role === 'student' && !userId) return res.status(400).json({ error: 'Falta user_id para la vista de alumno.' });
 
   try {
+    const role = userId
+      ? await resolveRoleForCourse(courseId, userId, { fallbackRole: requestedRole })
+      : requestedRole;
+
+    if (role === 'student' && !userId) {
+      return res.status(400).json({ error: 'Falta user_id para la vista de alumno.' });
+    }
+
     const data = await generateReportData(
       courseId,
       req.query.version,
@@ -554,12 +681,14 @@ web.get('/course-details', async (req, res) => {
     const userId = customContext.canvas_user_id || token.user;
     const roles = token.platformContext.roles || [];
 
-    let role = 'teacher';
-    if (roles.some(item => item.includes('Learner') || item.includes('Student'))) {
-      role = 'student';
-    }
-
     if (!courseId) return res.status(400).send('No hay contexto de curso.');
+
+    const role = await resolveRoleForCourse(courseId, userId, {
+      ltiRoles: roles,
+      fallbackRole: 'teacher'
+    });
+
+    console.log(`Roles LTI recibidos para curso ${courseId}:`, roles);
 
     let accountId = null;
     try {
