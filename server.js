@@ -1,11 +1,16 @@
+'use strict';
+
 const express = require('express');
 const dotenv = require('dotenv');
 dotenv.config();
+
 const axios = require('axios');
-const { stringify } = require('csv-stringify/sync');
-const pLimit = require('p-limit').default;
 const path = require('path');
+const pLimit = require('p-limit').default;
 const LtiProvider = require('ltijs').Provider;
+
+const { resolveReportVersion, normalizeVersion } = require('./src/report-version');
+const { resolveProgressTiming } = require('./src/progress-timing-provider');
 
 const {
   PORT = 3000,
@@ -17,45 +22,166 @@ const {
   LTI_ENCRYPTION_KEY,
   CANVAS_TOKEN,
   CLIENT_ID,
-  MONGO_URL,
-  NODE_ENV 
+  MONGO_URL
 } = process.env;
 
-// --- Configuración Axios ---
+if (!PLATFORM_URL) {
+  throw new Error('Falta PLATFORM_URL en las variables de entorno.');
+}
+
 const canvas = axios.create({
-  baseURL: `${PLATFORM_URL}/api/v1`,
-  headers: { Authorization: `Bearer ${CANVAS_TOKEN || ''}` }
+  baseURL: `${PLATFORM_URL.replace(/\/$/, '')}/api/v1`,
+  headers: { Authorization: `Bearer ${CANVAS_TOKEN || ''}` },
+  timeout: 30000
 });
 
-// --- Helpers de Paginación y Datos ---
+const accountHierarchyCache = new Map();
+
+const STUDENT_ROLES = new Set([
+  'estudiante', 'studentenrollment', 'student', 'learner', 'alumno'
+]);
+
+const TEACHER_ROLES = new Set([
+  'profesor', 'instructor', 'teacher', 'teacher enrollment',
+  'teacherenrollment', 'maestro', 'auxiliar', 'admin', 'administrator', 'visitante'
+]);
+
+const REPORT_VIEWS = {
+  teacher: {
+    basic: 'report-teacher-basic.html',
+    pro: 'report-teacher-pro.html'
+  },
+  student: {
+    basic: 'report-student-basic.html',
+    pro: 'report-student-pro.html'
+  }
+};
+
+function normalizeRole(value) {
+  const role = String(value || 'teacher').trim().toLowerCase();
+  if (STUDENT_ROLES.has(role)) return 'student';
+  if (TEACHER_ROLES.has(role)) return 'teacher';
+  return 'teacher';
+}
+
+function clampPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function excludedModuleNames() {
+  const configured = String(process.env.EXCLUDED_MODULE_NAMES || '')
+    .split(',')
+    .map(item => item.trim().toLocaleLowerCase('es-MX'))
+    .filter(Boolean);
+
+  return new Set(['programa del curso', ...configured]);
+}
+
+function shouldExcludeModule(name) {
+  return excludedModuleNames().has(String(name || '').trim().toLocaleLowerCase('es-MX'));
+}
+
 async function getAll(url, params = {}) {
-  let out = [];
+  const output = [];
   let next = url;
-  let cfg = { params: { per_page: 100, ...params } };
+  let config = { params: { per_page: 100, ...params } };
+
   while (next) {
-    const r = await canvas.get(next, cfg);
-    out = out.concat(r.data);
+    const response = await canvas.get(next, config);
+    output.push(...response.data);
     next = null;
-    const link = r.headers.link;
+
+    const link = response.headers.link;
     if (link) {
       for (const part of link.split(',')) {
         if (part.includes('rel="next"')) {
-          next = part.substring(part.indexOf('<') + 1, part.indexOf('>'))
-            .replace(`${PLATFORM_URL}/api/v1`, '');
+          next = part
+            .substring(part.indexOf('<') + 1, part.indexOf('>'))
+            .replace(`${PLATFORM_URL.replace(/\/$/, '')}/api/v1`, '');
+          break;
         }
       }
     }
-    cfg = {};
+
+    config = {};
   }
-  return out;
+
+  return output;
+}
+
+async function getAccountHierarchyIds(accountId) {
+  const initialId = String(accountId || '').trim();
+  if (!initialId) return [];
+
+  if (accountHierarchyCache.has(initialId)) {
+    return accountHierarchyCache.get(initialId);
+  }
+
+  const hierarchyPromise = (async () => {
+    const ids = [];
+    const visited = new Set();
+    let currentId = initialId;
+
+    // El límite evita ciclos inesperados por datos incorrectos.
+    for (let depth = 0; currentId && depth < 30; depth += 1) {
+      if (visited.has(currentId)) break;
+      visited.add(currentId);
+      ids.push(currentId);
+
+      const response = await canvas.get(`/accounts/${encodeURIComponent(currentId)}`);
+      const parentId = response.data?.parent_account_id;
+      currentId = parentId === null || parentId === undefined ? '' : String(parentId);
+    }
+
+    return ids;
+  })().catch(error => {
+    console.warn(`No se pudo consultar la jerarquía de la subcuenta ${initialId}: ${error.message}`);
+    return [initialId];
+  });
+
+  accountHierarchyCache.set(initialId, hierarchyPromise);
+  return hierarchyPromise;
+}
+
+async function getCourseDetails(courseId) {
+  const normalizedCourseId = String(courseId || '').trim();
+  if (!/^\d+$/.test(normalizedCourseId)) {
+    throw new Error('El ID del curso debe contener únicamente números.');
+  }
+
+  const response = await canvas.get(`/courses/${encodeURIComponent(normalizedCourseId)}`, {
+    params: { include: ['term', 'account'] }
+  });
+
+  const accountId = response.data.account_id;
+  const accountHierarchyIds = await getAccountHierarchyIds(accountId);
+
+  return {
+    id: response.data.id,
+    name: response.data.name,
+    code: response.data.course_code,
+    format: response.data.course_format || 'No especificado',
+    accountId,
+    accountHierarchyIds,
+    term: response.data.term || null
+  };
 }
 
 async function getStudents(courseId) {
-  const list = await getAll(`/courses/${courseId}/enrollments`, {
+  const enrollments = await getAll(`/courses/${courseId}/enrollments`, {
     'type[]': 'StudentEnrollment',
     'state[]': 'active'
   });
-  return list.map(e => ({ id: e.user.id, name: e.user.name, sis_user_id: e.user.sis_id || e.sis_user_id }));
+
+  return enrollments.map(enrollment => ({
+    canvasId: enrollment.user.id,
+    name: enrollment.user.name,
+    sortableName: enrollment.user.sortable_name || enrollment.user.name,
+    sisUserId: enrollment.user.sis_id || enrollment.sis_user_id || String(enrollment.user.id),
+    email: enrollment.user.email || enrollment.user.login_id || ''
+  }));
 }
 
 async function getModulesForStudent(courseId, studentId) {
@@ -65,356 +191,411 @@ async function getModulesForStudent(courseId, studentId) {
   });
 }
 
-// --- Lógica de Negocio (Reporte Profesor) ---
-async function generateReportData(courseId) {
-  if (!CANVAS_TOKEN) throw new Error('Falta CANVAS_TOKEN');
-  
-  const students = await getStudents(courseId);
+function resolveModuleCloseAt(module) {
+  const dueDates = (module.items || [])
+    .filter(item => item.completion_requirement)
+    .map(item => item.content_details?.due_at)
+    .filter(Boolean)
+    .map(value => new Date(value))
+    .filter(date => !Number.isNaN(date.getTime()));
+
+  if (!dueDates.length) return null;
+  return new Date(Math.max(...dueDates.map(date => date.getTime()))).toISOString();
+}
+
+function resolveModuleStatus(module, closeAt) {
+  const now = Date.now();
+  const unlockAt = module.unlock_at ? new Date(module.unlock_at).getTime() : null;
+  const closeTime = closeAt ? new Date(closeAt).getTime() : null;
+
+  if (unlockAt && unlockAt > now) return 'future';
+  if (closeTime && closeTime < now) return 'closed';
+  if (module.state === 'locked') return 'future';
+  return 'open';
+}
+
+async function generateReportData(courseId, requestedVersion = 'basic', onlyStudentId = null) {
+  if (!CANVAS_TOKEN) throw new Error('Falta CANVAS_TOKEN.');
+
+  const course = await getCourseDetails(courseId);
+  const version = resolveReportVersion({
+    courseId,
+    accountId: course.accountId,
+    accountIds: course.accountHierarchyIds,
+    requestedVersion
+  });
+
+  let students = await getStudents(courseId);
+  if (onlyStudentId !== null && onlyStudentId !== undefined && String(onlyStudentId).trim()) {
+    const userId = String(onlyStudentId);
+    students = students.filter(student =>
+      String(student.canvasId) === userId || String(student.sisUserId) === userId
+    );
+  }
+
   const limit = pLimit(8);
-  
-  const studentData = await Promise.all(
-    students.map(s =>
-      limit(async () => {
-        try {
-          const mods = await getModulesForStudent(courseId, s.id);
-          const rows = [];
-          for (const m of mods) {
-            if (m.name === 'Programa del Curso') continue; 
-            const items = m.items || [];
-            const reqItems = items.filter(i => !!i.completion_requirement);
-            const done = reqItems.filter(i => i.completion_requirement.completed).length;
-            const pct = reqItems.length ? Math.round((100 * done) / reqItems.length) : 0;
+  const studentRows = await Promise.all(
+    students.map(student => limit(async () => {
+      const modules = await getModulesForStudent(courseId, student.canvasId);
+      const moduleProgress = [];
+      const moduleDefinitions = [];
 
-            rows.push({
-              type: 'summary',
-              student_id: s.id,
-              student_name: s.name,
-              sis_user_id: s.sis_user_id,
-              module_id: m.id,
-              module_name: m.name,
-              module_state: m.state,
-              module_pct: pct
-            });
+      for (const module of modules) {
+        if (shouldExcludeModule(module.name)) continue;
 
-            for (const it of items) {
-              rows.push({
-                type: 'detail',
-                student_id: s.id,
-                student_name: s.name,
-                sis_user_id: s.sis_user_id,
-                module_id: m.id,
-                module_name: m.name,
-                item_id: it.id,
-                item_title: it.title,
-                item_type: it.type,
-                requirement_type: it.completion_requirement?.type || null,
-                completed: it.completion_requirement?.completed ?? null,
-                due_at: it.content_details?.due_at || null,
-                html_url: it.html_url || null
-              });
-            }
-          }
-          return rows;
-        } catch (e) { return []; }
-      })
-    )
+        const closeAt = resolveModuleCloseAt(module);
+        moduleDefinitions.push({
+          id: module.id,
+          name: module.name,
+          state: module.state || 'unlocked',
+          closeAt,
+          status: resolveModuleStatus(module, closeAt)
+        });
+
+        const requiredItems = (module.items || []).filter(item => Boolean(item.completion_requirement));
+        const viewedItems = requiredItems.filter(item => item.completion_requirement?.completed === true).length;
+        const totalItems = requiredItems.length;
+        const pendingItems = Math.max(totalItems - viewedItems, 0);
+        const totalPct = totalItems ? clampPercent((viewedItems / totalItems) * 100) : 0;
+
+        const timing = version === 'pro'
+          ? resolveProgressTiming({
+              courseId,
+              studentId: student.canvasId,
+              moduleId: module.id,
+              currentPct: totalPct
+            })
+          : {
+              atClose: totalPct,
+              afterClose: 0,
+              timingAvailable: true,
+              timingSource: 'basic-current-total'
+            };
+
+        moduleProgress.push({
+          moduleId: module.id,
+          totalPct,
+          atClosePct: timing.atClose,
+          afterClosePct: timing.afterClose,
+          timingAvailable: timing.timingAvailable,
+          timingSource: timing.timingSource,
+          viewedItems,
+          pendingItems,
+          totalItems,
+          items: requiredItems.map(item => ({
+            id: item.id,
+            title: item.title,
+            type: item.type,
+            completed: item.completion_requirement?.completed === true,
+            requirementType: item.completion_requirement?.type || null,
+            dueAt: item.content_details?.due_at || null,
+            htmlUrl: item.html_url || null
+          }))
+        });
+      }
+
+      return {
+        canvasId: student.canvasId,
+        sisUserId: student.sisUserId,
+        name: student.name,
+        sortableName: student.sortableName,
+        email: student.email,
+        modules: moduleProgress,
+        moduleDefinitions
+      };
+    }))
   );
 
-  const flat = studentData.flat();
-  const summaryRows = flat.filter(r => r.type === 'summary');
-  const detailRows = flat.filter(r => r.type === 'detail');
-
-  const studentsMap = new Map();
-  const modulesMap = new Map();
-  const matrix = {};
-  let moduleCounter = 0;
-
-  for (const row of summaryRows) {
-    if (!studentsMap.has(row.student_id)) {
-      studentsMap.set(row.student_id, {
-        id: row.student_id,
-        name: row.student_name,
-        sis_user_id: row.sis_user_id || row.student_id
-      });
+  const moduleOrder = [];
+  const moduleMap = new Map();
+  for (const student of studentRows) {
+    for (const module of student.moduleDefinitions) {
+      const key = String(module.id);
+      if (!moduleMap.has(key)) {
+        moduleMap.set(key, module);
+        moduleOrder.push(key);
+      }
     }
-    if (!modulesMap.has(row.module_id)) {
-      modulesMap.set(row.module_id, {
-        id: row.module_id,
-        name: row.module_name,
-        short_name: `Módulo ${moduleCounter++}`
-      });
-    }
-    matrix[`${row.student_id}_${row.module_id}`] = `${row.module_pct}%`; 
+    delete student.moduleDefinitions;
   }
 
-  const studentsList = Array.from(studentsMap.values()).sort((a, b) => 
-    (a.sis_user_id || '').localeCompare(b.sis_user_id || '', undefined, { numeric: true })
+  const orderedModules = moduleOrder.map((id, index) => ({
+    ...moduleMap.get(id),
+    shortName: `Módulo ${index + 1}`
+  }));
+  const orderedStudents = studentRows.sort((a, b) =>
+    String(a.sisUserId).localeCompare(String(b.sisUserId), undefined, { numeric: true })
   );
-  const modulesList = Array.from(modulesMap.values());
-  const csvReportData = [];
-
-  for (const s of studentsList) {
-    const csvRow = { 'ID IEST': s.sis_user_id, 'Nombre': s.name };
-    for (const m of modulesList) {
-      csvRow[m.short_name] = matrix[`${s.id}_${m.id}`] || '-';
-    }
-    csvReportData.push(csvRow);
-  }
 
   return {
-    summary: summaryRows,
-    detail: detailRows,
-    csv: stringify(csvReportData, { header: true, bom: true })
+    course,
+    version,
+    modules: orderedModules,
+    students: orderedStudents,
+    generatedAt: new Date().toISOString()
   };
 }
 
-// --- Configuración LTI ---
+function reportDataToLegacy(data) {
+  const summary = [];
+  const detail = [];
+
+  for (const student of data.students) {
+    const progressByModule = new Map(student.modules.map(item => [String(item.moduleId), item]));
+
+    for (const module of data.modules) {
+      const progress = progressByModule.get(String(module.id));
+      if (!progress) continue;
+
+      summary.push({
+        type: 'summary',
+        student_id: student.canvasId,
+        student_name: student.name,
+        sis_user_id: student.sisUserId,
+        module_id: module.id,
+        module_name: module.name,
+        module_state: module.state,
+        module_pct: progress.totalPct,
+        module_pct_at_close: progress.atClosePct,
+        module_pct_after_close: progress.afterClosePct
+      });
+
+      for (const item of progress.items) {
+        detail.push({
+          type: 'detail',
+          student_id: student.canvasId,
+          student_name: student.name,
+          sis_user_id: student.sisUserId,
+          module_id: module.id,
+          module_name: module.name,
+          item_id: item.id,
+          item_title: item.title,
+          item_type: item.type,
+          requirement_type: item.requirementType,
+          completed: item.completed,
+          due_at: item.dueAt,
+          html_url: item.htmlUrl
+        });
+      }
+    }
+  }
+
+  return { summary, detail };
+}
+
 const web = express();
 web.set('views', path.join(__dirname, 'views'));
 web.use(express.urlencoded({ extended: true }));
 web.use(express.json());
 
-const lti = LtiProvider; 
-
+const lti = LtiProvider;
 lti.setup(
   LTI_ENCRYPTION_KEY,
   { url: MONGO_URL },
-  { 
+  {
     appRoute: '/lti',
     loginRoute: '/login',
     keysetRoute: '/keys',
-    devMode: false, 
+    devMode: false,
     cookies: { secure: true, sameSite: 'None' }
   }
 );
 
 lti.whitelist(
-  '/', 
-  '/canvas-courses', 
-  '/course-details', 
-  '/report', 
-  '/report/data', 
+  '/',
+  '/report',
+  '/api/report-data',
   '/api/process-report',
-  '/api/get-real-role', 
-  '/api/coordinator-report',
-  '/css', 
-  '/js', 
+  '/canvas-courses',
+  '/course-details',
+  '/css',
+  '/js',
   '/img'
 );
 
-// --- Rutas de Vistas ---
-web.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'selector.html')); });
-web.get('/report', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'index.html')); });
+web.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'selector.html'));
+});
 
-// --- Rutas API: Profesor ---
+web.get('/report', async (req, res) => {
+  const courseId = req.query.course_id;
+  const role = normalizeRole(req.query.role);
+
+  if (!courseId) {
+    return res.status(400).send('No se recibió course_id.');
+  }
+
+  try {
+    const course = await getCourseDetails(courseId);
+    const version = resolveReportVersion({
+      courseId,
+      accountId: course.accountId,
+      accountIds: course.accountHierarchyIds,
+      requestedVersion: req.query.version
+    });
+    const filename = REPORT_VIEWS[role][version];
+    return res.sendFile(path.join(__dirname, 'views', filename));
+  } catch (error) {
+    console.error('Error resolviendo la vista:', error.message);
+    const fallbackVersion = normalizeVersion(req.query.version, 'basic');
+    return res.sendFile(path.join(__dirname, 'views', REPORT_VIEWS[role][fallbackVersion]));
+  }
+});
+
+web.get('/api/report-data', async (req, res) => {
+  const { course_id: courseId, user_id: userId } = req.query;
+  const role = normalizeRole(req.query.role);
+
+  if (!courseId) return res.status(400).json({ error: 'Falta course_id.' });
+  if (role === 'student' && !userId) return res.status(400).json({ error: 'Falta user_id para la vista de alumno.' });
+
+  try {
+    const data = await generateReportData(
+      courseId,
+      req.query.version,
+      role === 'student' ? userId : null
+    );
+    return res.json(data);
+  } catch (error) {
+    console.error('Error generando reporte:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Compatibilidad con el frontend anterior durante la migración.
 web.get('/api/process-report', async (req, res) => {
-  const { course_id } = req.query;
-  if (!course_id) return res.status(400).json({ error: 'Falta course_id' });
-  try {
-    const data = await generateReportData(course_id);
-    res.json({ summary: data.summary, detail: data.detail });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// --- Rutas API: Detección de Rol Real ---
-web.get('/api/get-real-role', async (req, res) => {
-  const { course_id, user_id } = req.query;
-  if (!course_id || !user_id) return res.status(400).json({ error: 'Faltan datos' });
-  if (!CANVAS_TOKEN) return res.status(500).json({ error: 'Falta Token' });
+  const { course_id: courseId } = req.query;
+  if (!courseId) return res.status(400).json({ error: 'Falta course_id.' });
 
   try {
-    const baseUrl = PLATFORM_URL.endsWith('/') ? PLATFORM_URL.slice(0, -1) : PLATFORM_URL;
-    const response = await axios.get(`${baseUrl}/api/v1/courses/${course_id}/enrollments`, {
-      headers: { Authorization: `Bearer ${CANVAS_TOKEN}` },
-      params: { user_id: user_id }
-    });
-
-    const enrollments = response.data;
-    if (enrollments && enrollments.length > 0) {
-      const custom = enrollments.find(e => e.role !== e.type);
-      if (custom) {
-        console.log(`✅ Rol Personalizado: ${custom.role} (User: ${user_id})`);
-        return res.json({ role: custom.role });
-      }
-      console.log(`ℹ️ Rol Estándar: ${enrollments[0].role} (User: ${user_id})`);
-      return res.json({ role: enrollments[0].role });
-    }
-
-    console.log(`⚠️ Sin inscripciones para User: ${user_id}`);
-    return res.json({ role: null });
-
+    const data = await generateReportData(courseId, req.query.version || 'basic');
+    return res.json(reportDataToLegacy(data));
   } catch (error) {
-    console.error('❌ Error buscando rol:', error.message);
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
-});
-
-// --- Rutas API: Reporte Coordinador ---
-web.get('/api/coordinator-report', async (req, res) => {
-  const { course_id } = req.query;
-  if (!course_id || !CANVAS_TOKEN) return res.status(400).json({ error: 'Datos incompletos' });
-
-  try {
-    const baseUrl = PLATFORM_URL.endsWith('/') ? PLATFORM_URL.slice(0, -1) : PLATFORM_URL;
-    const headers = { Authorization: `Bearer ${CANVAS_TOKEN}` };
-
-    console.log(`📋 Generando reporte Coordinador para curso: ${course_id}`);
-
-    // A. Datos Maestro
-    const teachersRes = await axios.get(`${baseUrl}/api/v1/courses/${course_id}/enrollments`, {
-      headers,
-      params: { type: ['TeacherEnrollment'] }
-    });
-    const teacher = teachersRes.data[0] || null;
-    const teacherData = {
-        name: teacher ? teacher.user.name : 'No asignado',
-        last_login: teacher ? teacher.last_activity_at : null,
-        total_seconds: teacher ? teacher.total_activity_time : 0
-    };
-
-    // B. Total Alumnos Activos
-    const studentsEnrollments = await axios.get(`${baseUrl}/api/v1/courses/${course_id}/enrollments`, {
-        headers,
-        params: { type: ['StudentEnrollment'], state: ['active'], per_page: 100 }
-    });
-    const totalStudents = studentsEnrollments.data.length;
-
-    // C. Tareas y Exámenes
-    const assignmentsRes = await axios.get(`${baseUrl}/api/v1/courses/${course_id}/assignments`, {
-        headers,
-        params: { per_page: 50, order_by: 'due_at' }
-    });
-
-    const assignments = assignmentsRes.data.map(a => {
-        const pending = a.needs_grading_count || 0;
-        const graded_approx = Math.max(0, totalStudents - pending); 
-        let typeLabel = 'Tarea';
-        if (a.quiz_id) typeLabel = 'Examen';
-        else if (a.submission_types.includes('discussion_topic')) typeLabel = 'Foro';
-
-        return {
-            title: a.name,
-            type: typeLabel,
-            due_at: a.lock_at || a.due_at,
-            needs_grading: pending,
-            graded: graded_approx,
-            total_students: totalStudents
-        };
-    });
-
-    res.json({ teacher: teacherData, total_students: totalStudents, assignments: assignments });
-
-  } catch (error) {
-    console.error('❌ Error reporte coordinador:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// --- Rutas API: Auxiliares (CSV, Detalles) ---
-web.get('/report/data', async (req, res) => {
-  const { kind, course_id } = req.query;
-  if (!course_id) return res.status(400).send('Falta course_id');
-  
-  const cacheKey = `csv_${course_id}`;
-  if (kind === 'csv' && web.locals[cacheKey]) {
-     res.setHeader('Content-Type', 'text/csv; charset=utf-8'); 
-     res.setHeader('Content-Disposition', 'attachment; filename="progreso.csv"');
-     return res.send(web.locals[cacheKey]);
-  }
-  try {
-    const data = await generateReportData(course_id);
-    if (kind === 'csv') {
-      web.locals[cacheKey] = data.csv; 
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8'); 
-      res.setHeader('Content-Disposition', 'attachment; filename="progreso.csv"');
-      return res.send(data.csv);
-    }
-    res.status(400).send('Solo CSV');
-  } catch (e) { res.status(500).send(e.message); }
 });
 
 web.get('/canvas-courses', async (req, res) => {
   try {
-    if (!CANVAS_TOKEN) throw new Error('Falta CANVAS_TOKEN');
-    const baseUrl = PLATFORM_URL.endsWith('/') ? PLATFORM_URL.slice(0, -1) : PLATFORM_URL;
-    const response = await axios.get(`${baseUrl}/api/v1/courses`, {
-      headers: { Authorization: `Bearer ${CANVAS_TOKEN}` },
-      params: { per_page: 100, enrollment_state: 'active', include: ['term'] }
+    if (!CANVAS_TOKEN) throw new Error('Falta CANVAS_TOKEN.');
+
+    const courses = await getAll('/courses', {
+      enrollment_state: 'active',
+      'include[]': ['term']
     });
-    const cursos = response.data.map(c => ({ id: c.id, nombre: c.name, codigo: c.course_code }));
-    res.json({ success: true, total: cursos.length, cursos });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+
+    return res.json({
+      success: true,
+      total: courses.length,
+      cursos: courses.map(course => ({
+        id: course.id,
+        nombre: course.name,
+        codigo: course.course_code,
+        account_id: course.account_id
+      }))
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 web.get('/course-details', async (req, res) => {
-  const { course_id } = req.query;
-  if (!course_id) return res.status(400).json({ error: 'Falta course_id' });
+  const courseId = req.query.course_id;
+  if (!courseId) return res.status(400).json({ error: 'Falta course_id.' });
+
   try {
-    const response = await canvas.get(`/courses/${course_id}`);
-    res.json({ 
-        id: response.data.id, 
-        nombre: response.data.name, 
-        codigo: response.data.course_code, 
-        formato: response.data.course_format || 'No especificado' 
+    const course = await getCourseDetails(courseId);
+    const version = resolveReportVersion({
+      courseId,
+      accountId: course.accountId,
+      accountIds: course.accountHierarchyIds,
+      requestedVersion: req.query.version
     });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+    return res.json({ ...course, version });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
-// --- Deploy y Lanzamiento LTI ---
 (async () => {
   await lti.deploy({ serverless: true, silent: true });
 
-  const posiblesUrls = [
-      PLATFORM_URL, 'https://iest.beta.instructure.com', 'https://iest.beta.instructure.com/',
-      'https://canvas.instructure.com', 'https://canvas.instructure.com/',
-      'https://canvas.beta.instructure.com', 'https://canvas.beta.instructure.com/',
-      'https://iest.instructure.com','https://iest.instructure.com/'
+  const platformUrls = [
+    PLATFORM_URL,
+    'https://iest.beta.instructure.com',
+    'https://iest.beta.instructure.com/',
+    'https://canvas.instructure.com',
+    'https://canvas.instructure.com/',
+    'https://canvas.beta.instructure.com',
+    'https://canvas.beta.instructure.com/',
+    'https://iest.instructure.com',
+    'https://iest.instructure.com/'
   ];
 
-  for (const url of posiblesUrls) {
-      if (!url) continue;
-      try {
-          await lti.registerPlatform({
-              url: url,
-              name: 'Canvas Variant',
-              clientId: CLIENT_ID,
-              authenticationEndpoint: AUTH_LOGIN_URL,
-              accesstokenEndpoint: AUTH_TOKEN_URL,
-              authConfig: { method: 'JWK_SET', key: KEYSET_URL }
-          });
-      } catch (err) {}
+  for (const url of platformUrls) {
+    if (!url) continue;
+    try {
+      await lti.registerPlatform({
+        url,
+        name: 'Canvas Variant',
+        clientId: CLIENT_ID,
+        authenticationEndpoint: AUTH_LOGIN_URL,
+        accesstokenEndpoint: AUTH_TOKEN_URL,
+        authConfig: { method: 'JWK_SET', key: KEYSET_URL }
+      });
+    } catch (error) {
+      // La plataforma puede estar previamente registrada.
+    }
   }
 
   lti.onConnect(async (token, req, res) => {
-    const customContext = token.platformContext.custom;
-    const courseId = (customContext && customContext.canvas_course_id) || token.platformContext.context.id;
-    const userId = (customContext && customContext.canvas_user_id) || token.user;
-
+    const customContext = token.platformContext.custom || {};
+    const courseId = customContext.canvas_course_id || token.platformContext.context?.id;
+    const userId = customContext.canvas_user_id || token.user;
     const roles = token.platformContext.roles || [];
-    let userRole = 'visitante';
-    
-    // Mapeo a minúsculas
-    if (roles.some(r => r.includes('Administrator'))) userRole = 'admin';
-    else if (roles.some(r => r.includes('Instructor'))) userRole = 'profesor';
-    else if (roles.some(r => r.includes('Learner') || r.includes('Student'))) userRole = 'estudiante';
-    else if (roles.some(r => r.includes('TeachingAssistant'))) userRole = 'auxiliar';
 
-    console.log(`🔗 Launch: Curso ${courseId} | User: ${userId} | Rol: ${userRole}`);
+    let role = 'teacher';
+    if (roles.some(item => item.includes('Learner') || item.includes('Student'))) {
+      role = 'student';
+    }
 
     if (!courseId) return res.status(400).send('No hay contexto de curso.');
-    return res.redirect(`/report?course_id=${courseId}&role=${userRole}&user_id=${userId}`);
+
+    let accountId = null;
+    try {
+      const course = await getCourseDetails(courseId);
+      accountId = course.accountId;
+    } catch (error) {
+      console.warn('No se pudo consultar account_id durante el launch:', error.message);
+    }
+
+    let accountHierarchyIds = [];
+    if (accountId) {
+      accountHierarchyIds = await getAccountHierarchyIds(accountId);
+    }
+
+    const version = resolveReportVersion({ courseId, accountId, accountIds: accountHierarchyIds });
+    const query = new URLSearchParams({
+      course_id: String(courseId),
+      role,
+      user_id: String(userId || ''),
+      version
+    });
+
+    console.log(`Launch LTI | Curso ${courseId} | Usuario ${userId} | Rol ${role} | Versión ${version}`);
+    return res.redirect(`/report?${query.toString()}`);
   });
 
   const host = express();
-  host.enable('trust proxy'); 
+  host.enable('trust proxy');
   host.use(express.static(path.join(__dirname, 'public')));
   host.use('/', lti.app);
   host.use('/', web);
 
-  host.listen(PORT, () => console.log(`✅ LTI tool corriendo en ${TOOL_URL}`));
-
-})().catch(err => {
-  console.error('❌ Error al iniciar la app:', err);
+  host.listen(PORT, () => {
+    console.log(`Reporte de avance ejecutándose en ${TOOL_URL || `http://localhost:${PORT}`}`);
+  });
+})().catch(error => {
+  console.error('Error al iniciar la aplicación:', error);
   process.exit(1);
 });
-//SE HIZO EL REGRESO A NOMBRE Y IDIEST

@@ -1,81 +1,269 @@
 <!doctype html>
-<html>
+<html lang="es">
 <head>
-  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-  <meta charset="utf-8" />
-  <title>Seleccionar Curso</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Probar reporte de avance</title>
+  <link rel="shortcut icon" href="/img/CANVAS_ico.svg" type="image/svg+xml">
   <style>
-    /* 💡 CAMBIO: Fondo gris */
-    body { font-family: 'Segoe UI', Arial, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; }
-    
-    /* 💡 CAMBIO: Contenedor color crema */
-    .container { background-color: #FBF5ED; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; }
-    
-    h1 { color: #F58220; margin-top: 0; margin-bottom: 25px; }
-    select, button { font-size: 16px; padding: 12px 15px; border-radius: 8px; border: 1px solid #ccc; }
-    select { min-width: 300px; }
-    button { 
-      background: #F58220; 
-      color: #fff; 
-      border-color: #F58220; 
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #f0f2f5;
+      color: #2f3438;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+    .container {
+      width: min(760px, 100%);
+      padding: 36px;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 12px 32px rgba(0,0,0,.09);
+    }
+    h1 { margin: 0 0 8px; color: #ff5900; }
+    .note { margin: 0 0 26px; color: #667078; line-height: 1.5; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .field { display: grid; gap: 8px; }
+    .field.full { grid-column: 1 / -1; }
+    label { font-weight: 700; }
+    select, input, button {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid #c9cfd4;
+      border-radius: 8px;
+      background: #fff;
+      font: inherit;
+    }
+    select:focus, input:focus {
+      outline: 3px solid rgba(255, 89, 0, .14);
+      border-color: #ff5900;
+    }
+    .separator {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #7b858c;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .separator::before, .separator::after {
+      content: "";
+      height: 1px;
+      flex: 1;
+      background: #e2e6e9;
+    }
+    .help {
+      margin: 0;
+      color: #737d84;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    button {
+      grid-column: 1 / -1;
+      border-color: #ff5900;
+      background: #ff5900;
+      color: #fff;
+      font-weight: 800;
       cursor: pointer;
-      margin-left: 10px; transition: background-color 0.2s ease; 
     }
-    button:hover { 
-      background-color: #E07014; 
+    button:hover:not(:disabled) { background: #ec5200; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    #status {
+      min-height: 24px;
+      margin: 16px 0 0;
+      color: #667078;
+      line-height: 1.5;
     }
-    #loading { font-style: italic; color: #777; }
+    #status.is-error { color: #b42318; }
+    #status.is-success { color: #2f7d32; }
+    @media (max-width: 640px) {
+      .container { padding: 24px 18px; }
+      .grid { grid-template-columns: 1fr; }
+      .field.full, .separator, button { grid-column: auto; }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Seleccionar un Curso</h1>
-    <div id="controls">
-      <select id="courseSelector">
-        <option value="">Cargando cursos...</option>
-      </select>
-      <button id="viewReportBtn" disabled>Ver Reporte</button>
+  <main class="container">
+    <h1>Reporte de avance</h1>
+    <p class="note">
+      Selecciona un curso de la lista o captura directamente su ID. En el lanzamiento LTI real,
+      Canvas proporciona el curso y el rol, y la versión se determina mediante la subcuenta.
+    </p>
+
+    <div class="grid">
+      <div class="field full">
+        <label for="courseSelector">Curso de la lista</label>
+        <select id="courseSelector">
+          <option value="">Cargando cursos...</option>
+        </select>
+      </div>
+
+      <div class="separator" aria-hidden="true">o</div>
+
+      <div class="field full">
+        <label for="manualCourseId">ID de curso manual</label>
+        <input
+          id="manualCourseId"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          placeholder="Ejemplo: 481"
+          aria-describedby="manualCourseHelp"
+        >
+        <p class="help" id="manualCourseHelp">
+          El ID manual tiene prioridad sobre la lista y permite consultar cualquier curso al que el token de Canvas tenga acceso.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="roleSelector">Vista</label>
+        <select id="roleSelector">
+          <option value="teacher">Maestro</option>
+          <option value="student">Alumno</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="versionSelector">Versión para la prueba</label>
+        <select id="versionSelector">
+          <option value="auto">AUTOMÁTICA SEGÚN SUBCUENTA</option>
+          <option value="basic">FORZAR VERSION_BASIC</option>
+          <option value="pro">FORZAR VERSION_PRO</option>
+        </select>
+      </div>
+
+      <div class="field" id="userField" hidden>
+        <label for="userId">Canvas User ID o ID IEST</label>
+        <input id="userId" type="text" placeholder="Ejemplo: 20853">
+      </div>
+
+      <button id="viewReportBtn" type="button" disabled>Ver reporte</button>
     </div>
-    <p id="loading"></p>
-  </div>
+
+    <p id="status" role="status">Cargando cursos disponibles...</p>
+  </main>
 
   <script>
-    // --- EL SCRIPT (JS) NO CAMBIA ---
-    const selector = document.getElementById('courseSelector');
+    const courseSelector = document.getElementById('courseSelector');
+    const manualCourseId = document.getElementById('manualCourseId');
+    const roleSelector = document.getElementById('roleSelector');
+    const versionSelector = document.getElementById('versionSelector');
+    const userField = document.getElementById('userField');
+    const userId = document.getElementById('userId');
     const button = document.getElementById('viewReportBtn');
-    const loadingText = document.getElementById('loading');
+    const status = document.getElementById('status');
+
+    function setStatus(message, type = '') {
+      status.textContent = message;
+      status.className = type ? `is-${type}` : '';
+    }
+
+    function selectedCourseId() {
+      return manualCourseId.value.trim() || courseSelector.value;
+    }
+
+    function updateButtonState() {
+      button.disabled = !selectedCourseId();
+    }
+
+    roleSelector.addEventListener('change', () => {
+      userField.hidden = roleSelector.value !== 'student';
+    });
+
+    courseSelector.addEventListener('change', () => {
+      if (courseSelector.value) manualCourseId.value = '';
+      updateButtonState();
+      setStatus('Curso seleccionado. La versión automática se resolverá mediante su subcuenta.');
+    });
+
+    manualCourseId.addEventListener('input', () => {
+      manualCourseId.value = manualCourseId.value.replace(/\D/g, '');
+      updateButtonState();
+      if (manualCourseId.value) {
+        setStatus('El ID manual tendrá prioridad sobre el curso seleccionado en la lista.');
+      }
+    });
+
+    button.addEventListener('click', async () => {
+      const courseId = selectedCourseId();
+      const role = roleSelector.value;
+      const versionChoice = versionSelector.value;
+
+      if (!courseId) return;
+      if (!/^\d+$/.test(courseId)) {
+        setStatus('El ID del curso debe contener únicamente números.', 'error');
+        manualCourseId.focus();
+        return;
+      }
+      if (role === 'student' && !userId.value.trim()) {
+        setStatus('Captura el Canvas User ID o ID IEST del alumno.', 'error');
+        userId.focus();
+        return;
+      }
+
+      button.disabled = true;
+      setStatus(`Verificando el curso ${courseId} en Canvas...`);
+
+      try {
+        const response = await fetch(`/course-details?course_id=${encodeURIComponent(courseId)}`);
+        const course = await response.json();
+        if (!response.ok) throw new Error(course.error || 'No se pudo consultar el curso.');
+
+        const detectedVersion = String(course.version || 'basic').toUpperCase();
+        setStatus(
+          `${course.name} · Subcuenta inmediata ${course.accountId ?? 'N/A'} · VERSION_${detectedVersion}`,
+          'success'
+        );
+
+        const query = new URLSearchParams({
+          course_id: String(course.id || courseId),
+          role
+        });
+
+        if (versionChoice !== 'auto') query.set('version', versionChoice);
+        if (role === 'student') query.set('user_id', userId.value.trim());
+
+        window.location.href = `/report?${query.toString()}`;
+      } catch (error) {
+        setStatus(
+          `No fue posible abrir el curso ${courseId}. ${error.message} Verifica el ID y los permisos del CANVAS_TOKEN.`,
+          'error'
+        );
+        button.disabled = false;
+      }
+    });
 
     (async () => {
       try {
-        const res = await fetch('/canvas-courses');
-        if (!res.ok) throw new Error('No se pudieron cargar los cursos');
-        const data = await res.json();
-        selector.innerHTML = '';
-        if (data.cursos && data.cursos.length > 0) {
-          data.cursos.forEach(curso => {
-            const option = new Option(curso.nombre, curso.id);
-            selector.add(option);
-            
-          });
-          button.disabled = false;
-        } else {
-          selector.innerHTML = '<option value="">No se encontraron cursos</option>';
+        const response = await fetch('/canvas-courses');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los cursos.');
+
+        courseSelector.replaceChildren(new Option('Selecciona un curso...', ''));
+        for (const course of data.cursos || []) {
+          courseSelector.add(new Option(`${course.nombre} (${course.id})`, course.id));
         }
-      } catch (err) {
-        console.error(err);
-        loadingText.textContent = 'Error al cargar la lista de cursos. Verifica el CANVAS_TOKEN.';
-        selector.style.display = 'none';
-        button.style.display = 'none';
+
+        if ((data.cursos || []).length) {
+          setStatus('Selecciona un curso de la lista o captura un ID manual.');
+        } else {
+          setStatus('No se encontraron cursos en la lista, pero puedes consultar uno mediante su ID.');
+        }
+      } catch (error) {
+        courseSelector.replaceChildren(new Option('Lista no disponible', ''));
+        setStatus(`${error.message} Todavía puedes consultar un curso mediante su ID manual.`, 'error');
+      } finally {
+        updateButtonState();
       }
     })();
-
-    button.onclick = () => {
-      const selectedCourseId = selector.value;
-      if (selectedCourseId) {
-        window.location.href = `/report?course_id=${selectedCourseId}`;
-      }
-    };
   </script>
 </body>
 </html>

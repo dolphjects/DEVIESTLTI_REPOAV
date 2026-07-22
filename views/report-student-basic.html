@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Reporte de avance MP alumnos</title>
+<link rel="icon" type="image/svg+xml" href="/img/CANVAS_ico.svg">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@600;700&amp;display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --canvas-orange: #ff5a1f;
+    --page-bg: #fff;
+    --text: #202328;
+    --muted: #5c646a;
+    --line: #d7dce1;
+    --heading-blue: #2f4057;
+    --panel-shadow: 0 12px 28px rgba(47, 64, 87, 0.10);
+    --green: #74b657;
+    --green-soft: #eaf5e6;
+    --yellow: #e1aa2f;
+    --yellow-soft: #fff5d9;
+    --red: #e96c64;
+    --red-soft: #fdeceb;
+    --neutral: #8a9399;
+    --neutral-soft: #f2f4f6;
+    --white-soft: #fff;
+    --late-orange: #ff5a1f;
+    --late-stripe: rgba(101, 111, 119, 0.68);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+  }
+
+  .lti-banner,
+  .lti-footer {
+    background: #fff;
+  }
+
+  .lti-banner img,
+  .lti-footer img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .student-report {
+    margin: 0 10px;
+    padding: 46px 26px 28px;
+    background: var(--page-bg);
+  }
+
+  .report-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+
+  .course-title {
+    margin: 0;
+    color: var(--canvas-orange);
+    font-family: 'Zilla Slab', Georgia, serif;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .course-code {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .student-chip {
+    justify-self: center;
+    width: min(360px, 100%);
+    max-width: 360px;
+    padding: 14px 18px;
+    border: 1px solid rgba(255, 90, 31, 0.28);
+    border-radius: 8px;
+    background: #fff8f2;
+    color: var(--heading-blue);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .student-chip span {
+    display: block;
+    margin-top: 3px;
+    color: var(--text);
+    font-size: 18px;
+  }
+
+  .summary-panel {
+    margin-top: 32px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: var(--panel-shadow);
+    overflow: hidden;
+  }
+
+  .summary-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 26px;
+    background: var(--canvas-orange);
+    color: #fff;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .summary-head::-webkit-details-marker {
+    display: none;
+  }
+
+  .summary-head::after {
+    content: "+";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 2px solid rgba(255, 255, 255, 0.76);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    flex: 0 0 auto;
+  }
+
+  .summary-panel[open] .summary-head::after {
+    content: "-";
+  }
+
+  .summary-head:focus-visible {
+    outline: 2px solid rgba(255, 90, 31, 0.78);
+    outline-offset: -3px;
+  }
+
+  .summary-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .summary-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.86fr);
+    gap: 0;
+  }
+
+  .info-section {
+    padding: 26px;
+  }
+
+  .info-section + .info-section {
+    border-left: 1px solid #e7ebef;
+  }
+
+  .info-section h3 {
+    margin: 0 0 14px;
+    color: var(--heading-blue);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .info-section p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.58;
+  }
+
+  .info-section p + p {
+    margin-top: 12px;
+  }
+
+  .legend-list {
+    display: grid;
+    gap: 12px;
+    margin: 18px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .legend-list li {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    color: var(--text);
+    line-height: 1.45;
+  }
+
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    margin-top: 4px;
+    border-radius: 50%;
+  }
+
+  .legend-dot.is-red {
+    background: var(--red);
+  }
+
+  .legend-dot.is-white {
+    border: 1px solid #c6ccd2;
+    background: #fff;
+  }
+
+  .legend-dot.is-yellow {
+    background: var(--yellow);
+  }
+
+  .legend-dot.is-green {
+    background: var(--green);
+  }
+
+  .legend-dot.is-striped {
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    border: 1px solid #6a737b;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        var(--late-stripe) 0,
+        var(--late-stripe) 3px,
+        transparent 3px,
+        transparent 8px
+      ),
+      var(--late-orange);
+  }
+
+  .legend-list strong {
+    font-weight: 800;
+  }
+
+  .legend-list .is-white-text {
+    color: #5e6870;
+  }
+
+  .legend-list .is-red-text {
+    color: #d75851;
+  }
+
+  .legend-list .is-yellow-text {
+    color: #bd8620;
+  }
+
+  .legend-list .is-green-text {
+    color: #4e963f;
+  }
+
+  .legend-list .is-striped-text {
+    color: var(--late-orange);
+  }
+
+  .progress-section {
+    margin-top: 46px;
+  }
+
+  .section-title {
+    margin: 0 0 16px;
+    color: var(--canvas-orange);
+    font-family: 'Zilla Slab', Georgia, serif;
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.15;
+  }
+
+  .table-scroll {
+    border: 1px solid #e3e7eb;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: var(--panel-shadow);
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+  }
+
+  thead th {
+    height: 54px;
+    padding: 0 16px;
+    border-right: 1px solid rgba(255, 255, 255, 0.24);
+    background: var(--canvas-orange);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  thead th:nth-child(2),
+  thead th:nth-child(3) {
+    text-align: center;
+  }
+
+  thead th:first-child {
+    border-top-left-radius: 13px;
+  }
+
+  thead th:last-child {
+    border-right: 0;
+    border-top-right-radius: 13px;
+  }
+
+  tbody td {
+    min-height: 54px;
+    padding: 13px 16px;
+    border-right: 1px solid #edf0f3;
+    border-bottom: 1px solid #edf0f3;
+    background: #fff;
+    color: #32363a;
+    font-size: 14px;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+
+  tbody tr:nth-child(even) td {
+    background: #fff8f2;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody td:nth-child(2) {
+    text-align: center;
+    width: 140px;
+  }
+
+  tbody td:last-child {
+    border-right: 0;
+  }
+
+  .col-module {
+    width: 28%;
+  }
+
+  .col-percent {
+    width: 16%;
+  }
+
+  .col-progress {
+    width: 56%;
+  }
+
+  .percent-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 62px;
+    min-height: 30px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-weight: 800;
+    cursor: default;
+    overflow: visible;
+  }
+
+  .percent-pill.is-white {
+    border-color: #c8d0d6;
+    background: var(--white-soft);
+    color: #5f6870;
+  }
+
+  .percent-pill.is-red {
+    background: var(--red-soft);
+    color: #bd3e38;
+  }
+
+  .percent-pill.is-yellow {
+    background: var(--yellow-soft);
+    color: #946717;
+  }
+
+  .percent-pill.is-green {
+    background: var(--green-soft);
+    color: #3f8133;
+  }
+
+  .percent-pill.is-neutral {
+    background: var(--neutral-soft);
+    color: var(--neutral);
+  }
+
+  .progress-track {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    min-width: 280px;
+    height: 44px;
+    border-radius: 8px;
+    background: #eef1f4;
+    overflow: visible;
+  }
+
+  .progress-segment {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 100%;
+    color: #fff;
+    font-size: 17px;
+    font-weight: 900;
+    line-height: 1;
+    text-align: center;
+    cursor: default;
+    overflow: visible;
+  }
+
+  .progress-segment.is-first {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+  }
+
+  .progress-segment.is-last {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+  }
+
+  .progress-segment.is-white {
+    border: 1px solid #c8d0d6;
+    background: #fff;
+    color: #5f6870;
+  }
+
+  .progress-segment.is-red {
+    background: var(--red);
+  }
+
+  .progress-segment.is-yellow {
+    background: var(--yellow);
+  }
+
+  .progress-segment.is-green {
+    background: var(--green);
+  }
+
+  .progress-segment.is-late {
+    background:
+      repeating-linear-gradient(
+        135deg,
+        var(--late-stripe) 0,
+        var(--late-stripe) 3px,
+        transparent 3px,
+        transparent 12px
+      ),
+      var(--late-orange);
+  }
+
+  .progress-segment.is-pending {
+    background: #eef1f4;
+    color: var(--muted);
+  }
+
+  .progress-label {
+    position: relative;
+    z-index: 2;
+    padding: 0 6px;
+    white-space: nowrap;
+  }
+
+  .progress-segment.is-compact .progress-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .progress-boundary {
+    position: absolute;
+    top: -12px;
+    bottom: -2px;
+    z-index: 4;
+    width: 4px;
+    background: #111;
+    transform: translateX(-50%);
+  }
+
+  .progress-boundary::before {
+    content: "×";
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 2px solid #111;
+    border-radius: 50%;
+    background: #c51e1e;
+    color: #111;
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1;
+    transform: translateX(-50%);
+  }
+
+  .progress-tooltip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 50;
+    width: max-content;
+    max-width: min(360px, calc(100vw - 32px));
+    padding: 13px 16px;
+    border: 1px solid #8f8f8f;
+    border-radius: 10px;
+    background: #f2f2f2;
+    color: #111;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.28;
+    text-align: center;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.10);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 8px);
+    transition: opacity .16s ease, transform .16s ease;
+    visibility: hidden;
+  }
+
+  .progress-tooltip.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    visibility: visible;
+  }
+
+  .phrase-panel {
+    margin-top: 34px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: var(--panel-shadow);
+    overflow: hidden;
+  }
+
+  .phrase-content {
+    padding: 22px 24px;
+  }
+
+  .phrase-day {
+    margin: 0 0 6px;
+    color: var(--canvas-orange);
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  .phrase-text {
+    margin: 0;
+    color: var(--text);
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .empty-note {
+    margin: 52px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 900px) {
+    .student-report {
+      margin: 0;
+      padding: 24px 18px;
+    }
+
+    .report-header,
+    .summary-body,
+    .phrase-panel {
+      grid-template-columns: 1fr;
+    }
+
+    .student-chip {
+      max-width: none;
+      text-align: left;
+    }
+
+    .info-section + .info-section {
+      border-top: 1px solid #e7ebef;
+      border-left: 0;
+    }
+
+    .course-title,
+    .section-title {
+      font-size: 24px;
+    }
+
+    .summary-head,
+    .info-section,
+    .phrase-content {
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+  }
+</style>
+  <link rel="stylesheet" href="/css/report-loader.css">
+</head>
+
+<body class="report-is-loading" data-report-role="student" data-report-version="basic">
+  <div id="report-loading-overlay" class="report-loading-overlay" role="status" aria-live="polite" aria-label="Cargando reporte de avance">
+    <div class="report-loading-content">
+      <img class="report-loading-image" src="/img/loading.gif" alt="Cargando reporte de avance">
+    </div>
+  </div>
+
+  <div class="lti-banner" role="banner" aria-label="Reporte de avance">
+    <img src="/img/banner-reporte-avance.png" alt="Reporte de avance">
+  </div>
+
+  <main class="student-report">
+    <header class="report-header">
+      <div>
+        <h1 class="course-title" id="courseTitle">Cargando curso...</h1>
+        <p class="course-code" id="courseCode">Código: ...</p>
+      </div>
+
+      <p class="student-chip">
+        Hola,
+        <span id="studentName">Cargando alumno...</span>
+      </p>
+    </header>
+
+    <details class="summary-panel" aria-labelledby="summaryTitle">
+      <summary class="summary-head">
+        <span class="summary-title" id="summaryTitle">Guía de uso</span>
+      </summary>
+
+      <div class="summary-body">
+        <div class="info-section">
+          <h3>Qué muestra tu reporte</h3>
+          <p>
+            Este reporte te muestra el avance que llevas en el <strong>ingreso a los contenidos</strong> que tu profesor haya dado de alta
+            <strong>en cada módulo</strong> de tu materia. El avance mostrado aquí es <strong>informativo y no representa tu desempeño académico</strong>,
+            sino únicamente tu interacción con esos contenidos. Tu profesor también puede consultar este avance desde su propio reporte para llevar un seguimiento.
+          </p>
+        </div>
+
+        <div class="info-section">
+          <h3>Cómo funciona</h3>
+          <p>Para ayudarte a identificar tu progreso, cada módulo se muestra con un color que indica tu nivel de avance:</p>
+
+          <ul class="legend-list">
+            <li>
+              <span class="legend-dot is-white" aria-hidden="true"></span>
+              <span><strong class="is-white-text">Blanco:</strong> No has revisado ningún contenido.</span>
+            </li>
+            <li>
+              <span class="legend-dot is-red" aria-hidden="true"></span>
+              <span><strong class="is-red-text">Rojo:</strong> Falta mucho contenido por revisar.</span>
+            </li>
+            <li>
+              <span class="legend-dot is-yellow" aria-hidden="true"></span>
+              <span><strong class="is-yellow-text">Amarillo:</strong> Aún tienes contenido pendiente.</span>
+            </li>
+            <li>
+              <span class="legend-dot is-green" aria-hidden="true"></span>
+              <span><strong class="is-green-text">Verde:</strong> Has completado la revisión del módulo.</span>
+            </li>
+          </ul>
+
+          <br>
+          <p class="empty-note">Este indicador te permite verificar en qué medida has ingresado a los contenidos integrados por tu profesor.</p>
+        </div>
+      </div>
+    </details>
+
+    <section class="progress-section" aria-labelledby="progressTitle">
+      <h2 class="section-title" id="progressTitle">Reporte de avance</h2>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-module">Módulos</th>
+              <th class="col-percent">% de avance</th>
+              <th class="col-progress">Progreso</th>
+            </tr>
+          </thead>
+          <tbody id="moduleRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="phrase-panel" aria-label="Mensaje motivador">
+      <div class="phrase-content">
+        <p class="phrase-day" id="phraseDay">Viernes</p>
+        <p class="phrase-text" id="phraseText">Un empujoncito más hoy y el fin de semana será puro disfrute.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="lti-footer" role="contentinfo" aria-label="Cierre LTI">
+    <img src="/img/banner-cierre-lti.png" alt="">
+  </div>
+
+<script src="/js/report-student.js" defer></script>
+</body>
+</html>

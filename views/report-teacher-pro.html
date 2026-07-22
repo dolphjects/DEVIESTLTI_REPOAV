@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Reporte de avance</title>
+<link rel="icon" type="image/svg+xml" href="/img/CANVAS_ico.svg">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --canvas-orange: #ff5a1f;
+    --page-bg: #fff;
+    --text: #34373b;
+    --muted: #778186;
+    --line: #d7dce1;
+    --filter-bg: #231f20;
+    --filter-line: #231f20;
+    --row-alt: #fbf3ea;
+    --heading-blue: #2f4057;
+    --green: #74b657;
+    --green-soft: #eaf5e6;
+    --yellow: #e1aa2f;
+    --yellow-soft: #fff5d9;
+    --red: #e96c64;
+    --red-soft: #fdeceb;
+    --remaining-orange: #ffc09a;
+    --remaining-stripe: rgba(101, 111, 119, 0.34);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+  }
+
+  .lti-banner,
+  .lti-footer {
+    background: #fff;
+  }
+
+  .lti-banner img,
+  .lti-footer img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .report-page {
+    margin: 0 10px;
+    padding: 46px 26px 22px;
+    background: var(--page-bg);
+  }
+
+  .course-title {
+    margin: 0;
+    color: #ff5900;
+    font-family: 'Zilla Slab', Georgia, serif;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .course-code {
+    margin: 24px 0 0;
+    color: var(--muted);
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .download-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 22px;
+  }
+
+  .info-panel {
+    margin-top: 28px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 8px 22px rgba(47, 64, 87, 0.08);
+    overflow: hidden;
+  }
+
+  .info-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 68px;
+    padding: 18px 26px;
+    border-bottom: 1px solid var(--canvas-orange);
+    background: var(--canvas-orange);
+    color: #fff;
+    font-size: 18px;
+    font-weight: 800;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .info-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .info-summary:focus-visible {
+    outline: 2px solid rgba(255, 90, 31, 0.78);
+    outline-offset: -3px;
+  }
+
+  .info-guide-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .info-panel-header {
+    padding: 22px 26px 20px;
+    border-bottom: 1px solid #e7ebef;
+    background: #ffffff;
+  }
+
+  .info-panel h3 {
+    margin: 0;
+    color: var(--heading-blue);
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .info-lead {
+    max-width: 980px;
+    margin: 12px 0 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.58;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .info-section {
+    padding: 24px 26px 26px;
+  }
+
+  .info-section + .info-section {
+    border-top: 1px solid #e7ebef;
+    border-left: 0;
+  }
+
+  .info-section h4 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 14px;
+    color: var(--heading-blue);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .info-section h4::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--canvas-orange);
+    box-shadow: 0 0 0 5px rgba(255, 90, 31, 0.12);
+  }
+
+  .audience-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .audience-note {
+    margin: 0;
+    padding: 13px 15px;
+    border-left: 4px solid var(--canvas-orange);
+    background: #fbfcfd;
+    color: var(--text);
+    line-height: 1.55;
+  }
+
+  .audience-note strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #202328;
+  }
+
+  .info-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 18px;
+    margin: 0;
+    padding: 0;
+    color: var(--text);
+    list-style: none;
+    line-height: 1.55;
+  }
+
+  .info-list li {
+    position: relative;
+    min-height: 44px;
+    padding-left: 28px;
+  }
+
+  .info-list li::before {
+    content: "";
+    position: absolute;
+    top: .38em;
+    left: 0;
+    width: 15px;
+    height: 15px;
+    border: 2px solid var(--canvas-orange);
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  .info-list li::after {
+    content: "";
+    position: absolute;
+    top: calc(.38em + 4px);
+    left: 4px;
+    width: 7px;
+    height: 4px;
+    border-left: 2px solid var(--canvas-orange);
+    border-bottom: 2px solid var(--canvas-orange);
+    transform: rotate(-45deg);
+  }
+
+  .info-panel strong {
+    font-weight: 800;
+  }
+
+  .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 42px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 24px;
+    background: var(--canvas-orange);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .btn-download:hover {
+    background: #ec4f18;
+  }
+
+  .download-mark {
+    display: inline-grid;
+    width: 15px;
+    height: 15px;
+    place-items: center;
+    border-radius: 4px;
+    background: #7fb1c8;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .filters-panel {
+    display: flex;
+    gap: 22px;
+    align-items: flex-end;
+    margin-top: 22px;
+    padding: 20px 22px 22px;
+    border: 1px solid var(--filter-line);
+    border-radius: 8px;
+    background: var(--filter-bg);
+    box-shadow: 0 2px 8px rgba(110, 82, 44, 0.08);
+  }
+
+  .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .filter-field label {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .filter-field input,
+  .filter-field select {
+    height: 38px;
+    border: 1px solid #bfc6cc;
+    border-radius: 4px;
+    background: #fff;
+    color: #202328;
+    font: inherit;
+  }
+
+  .filter-field input {
+    width: 210px;
+    padding: 0 12px;
+  }
+
+  .filter-field select {
+    width: 510px;
+    padding: 0 36px 0 14px;
+  }
+
+  .filter-field input:focus,
+  .filter-field select:focus {
+    outline: 2px solid rgba(255, 90, 31, 0.22);
+    outline-offset: 1px;
+    border-color: var(--canvas-orange);
+  }
+
+  .table-section {
+    margin-top: 64px;
+  }
+
+  .section-title {
+    margin: 0 0 16px;
+    color: var(--canvas-orange);
+    font-family: 'Zilla Slab', Georgia, serif;
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.15;
+  }
+
+  .table-scroll {
+    border: 1px solid #e3e7eb;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(47, 64, 87, 0.10);
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    min-width: 1160px;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+  }
+
+  thead th {
+    height: 52px;
+    padding: 0 12px;
+    border: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.22);
+    background: var(--canvas-orange);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .01em;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  thead th:first-child {
+    border-top-left-radius: 13px;
+  }
+
+  thead th:last-child {
+    border-right: 0;
+    border-top-right-radius: 13px;
+  }
+
+  tbody td {
+    height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-right: 1px solid #edf0f3;
+    border-bottom: 1px solid #edf0f3;
+    background: #fff;
+    color: #32363a;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  tbody tr:nth-child(even) td {
+    background: #fff8f2;
+  }
+
+  tbody tr:hover td {
+    background: #fff1e8;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody td:last-child {
+    border-right: 0;
+  }
+
+  tbody td:nth-child(1) {
+    width: 10%;
+  }
+
+  tbody td:nth-child(2) {
+    width: 22.5%;
+    text-align: left;
+  }
+
+  .col-id {
+    width: 10%;
+  }
+
+  .col-name {
+    width: 22.5%;
+  }
+
+  .col-module {
+    width: 8.4%;
+  }
+
+  .sort-indicator {
+    display: inline-grid;
+    width: 16px;
+    height: 16px;
+    margin-left: 3px;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+    vertical-align: 1px;
+  }
+
+  .sort-header-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: inherit;
+    cursor: pointer;
+  }
+
+  .sort-header-button:hover,
+  .sort-header-button:focus {
+    outline: none;
+    text-decoration: underline;
+  }
+
+  .sort-header-button:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.7);
+    outline-offset: 3px;
+    border-radius: 4px;
+    text-decoration: none;
+  }
+
+  .empty-row td {
+    height: 56px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .progress-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 58px;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 1px solid rgba(153, 119, 71, 0.24);
+    border-radius: 999px;
+    background: #fff;
+    color: #997747;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+
+  .progress-button.is-white {
+    border-color: #dce2e7;
+    background: #fff;
+    color: #596268;
+  }
+
+  .progress-button.is-red {
+    border-color: rgba(233, 108, 100, 0.32);
+    background: var(--red-soft);
+    color: #bd3e38;
+  }
+
+  .progress-button.is-yellow {
+    border-color: rgba(225, 170, 47, 0.34);
+    background: var(--yellow-soft);
+    color: #946717;
+  }
+
+  .progress-button.is-green {
+    border-color: rgba(116, 182, 87, 0.34);
+    background: var(--green-soft);
+    color: #3f8133;
+  }
+
+  .progress-button:hover,
+  .progress-button:focus {
+    border-color: rgba(255, 90, 31, 0.48);
+    box-shadow: 0 6px 14px rgba(255, 90, 31, 0.16);
+    outline: none;
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+
+  .progress-button:focus-visible {
+    outline: 2px solid rgba(255, 90, 31, 0.35);
+    outline-offset: 3px;
+    border-radius: 3px;
+    text-decoration: none;
+  }
+
+  .progress-warning {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .mail-reminder-button {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    margin: 24px auto 0;
+    place-items: center;
+    border: 0;
+    border-radius: 999px;
+    background: var(--canvas-orange);
+    color: #fff;
+    font-size: 21px;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(255, 90, 31, 0.22);
+    transition: background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+
+  .mail-reminder-button:hover,
+  .mail-reminder-button:focus {
+    background: #ec4f18;
+    box-shadow: 0 12px 24px rgba(255, 90, 31, 0.28);
+    outline: none;
+    transform: translateY(-1px);
+  }
+
+  .mail-reminder-button:focus-visible {
+    outline: 2px solid rgba(255, 90, 31, 0.35);
+    outline-offset: 3px;
+  }
+
+  .deadline-bar-section {
+    width: min(100%, 920px);
+    margin: 34px auto 0;
+  }
+
+  .deadline-progress {
+    position: relative;
+    display: flex;
+    width: min(100%, 620px);
+    height: 52px;
+    margin: 0 auto;
+    border-radius: 8px;
+    background: #eceff2;
+    overflow: visible;
+  }
+
+  .deadline-segment {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1;
+    overflow: visible;
+  }
+
+  .deadline-segment[data-tooltip] {
+    cursor: default;
+  }
+
+  .deadline-segment[data-tooltip]::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 24px);
+    left: 50%;
+    z-index: 4;
+    width: 360px;
+    max-width: calc(100vw - 96px);
+    padding: 16px 18px;
+    border: 1px solid #8f8f8f;
+    border-radius: 10px;
+    background: #f2f2f2;
+    color: #111;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.25;
+    text-align: center;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.10);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 6px);
+    transition: opacity .16s ease, transform .16s ease;
+    visibility: hidden;
+  }
+
+  .deadline-segment[data-tooltip]::after {
+    content: "";
+    position: absolute;
+    bottom: calc(100% + 11px);
+    left: 50%;
+    z-index: 3;
+    width: 24px;
+    height: 24px;
+    border-right: 1px solid #8f8f8f;
+    border-bottom: 1px solid #8f8f8f;
+    background: #f2f2f2;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 6px) rotate(45deg);
+    transition: opacity .16s ease, transform .16s ease;
+    visibility: hidden;
+  }
+
+  .deadline-segment[data-tooltip]:hover::before,
+  .deadline-segment[data-tooltip]:hover::after,
+  .deadline-segment[data-tooltip]:focus-visible::before,
+  .deadline-segment[data-tooltip]:focus-visible::after,
+  .deadline-segment[data-tooltip].is-tooltip-visible::before,
+  .deadline-segment[data-tooltip].is-tooltip-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    visibility: visible;
+  }
+
+  .deadline-segment[data-tooltip]:hover::after,
+  .deadline-segment[data-tooltip]:focus-visible::after,
+  .deadline-segment[data-tooltip].is-tooltip-visible::after {
+    transform: translate(-50%, 0) rotate(45deg);
+  }
+
+  .deadline-segment.is-before {
+    border-radius: 8px 0 0 8px;
+    background: var(--red);
+  }
+
+  .deadline-segment.is-after {
+    border-radius: 0 8px 8px 0;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        var(--remaining-stripe) 0,
+        var(--remaining-stripe) 3px,
+        transparent 3px,
+        transparent 12px
+      ),
+      var(--canvas-orange);
+  }
+
+  .deadline-segment.is-empty {
+    border-radius: 0 8px 8px 0;
+    background: #edf0f3;
+    color: var(--muted);
+  }
+
+  .deadline-segment.is-empty.is-only {
+    flex: 1 1 100%;
+    border-radius: 8px;
+  }
+
+  .deadline-segment.is-complete {
+    border-radius: 8px;
+  }
+
+  .deadline-marker {
+    position: absolute;
+    top: -18px;
+    width: 28px;
+    height: 28px;
+    transform: translateX(-50%);
+    display: none;
+    place-items: center;
+    border: 2px solid #111;
+    border-radius: 50%;
+    background: #c51e1e;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    z-index: 2;
+  }
+
+  .deadline-progress.has-late .deadline-marker {
+    display: grid;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background: rgba(0, 0, 0, 0.68);
+  }
+
+  .modal-overlay.is-open {
+    display: flex;
+  }
+
+  .modal-card {
+    position: relative;
+    width: min(1380px, calc(100vw - 64px));
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    padding: 54px 52px 74px;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 28px;
+    right: 30px;
+    border: 0;
+    background: transparent;
+    color: #a8a8a8;
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .modal-close:hover,
+  .modal-close:focus {
+    color: #777;
+    outline: none;
+  }
+
+  .modal-course-title {
+    margin: 0;
+    padding: 0 52px;
+    color: var(--canvas-orange);
+    font-size: clamp(28px, 3vw, 46px);
+    font-weight: 800;
+    line-height: 1.12;
+    text-align: center;
+  }
+
+  .modal-code {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: clamp(18px, 1.7vw, 26px);
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .modal-student {
+    margin: 56px 0 0;
+    color: var(--heading-blue);
+    font-size: clamp(22px, 2.1vw, 31px);
+    font-weight: 800;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .modal-table-wrap {
+    width: min(100%, 1140px);
+    margin: 58px auto 0;
+    overflow-x: auto;
+    border-radius: 7px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .modal-detail-table {
+    min-width: 1040px;
+    table-layout: fixed;
+  }
+
+  .modal-detail-table th {
+    height: 68px;
+    padding: 0 18px;
+    border-color: rgba(255, 255, 255, 0.45);
+    font-size: 23px;
+  }
+
+  .modal-detail-table td {
+    height: 68px;
+    padding: 0 18px;
+    background: #fff;
+    color: #333;
+    font-size: 24px;
+    font-weight: 500;
+    text-align: center;
+  }
+
+  .modal-detail-table td:first-child {
+    text-align: center;
+  }
+
+  .modal-detail-table th:nth-child(1),
+  .modal-detail-table td:nth-child(1) {
+    width: 14%;
+  }
+
+  .modal-detail-table th:nth-child(2),
+  .modal-detail-table td:nth-child(2) {
+    width: 16%;
+    text-align: center;
+  }
+
+  .modal-detail-table th:nth-child(3),
+  .modal-detail-table td:nth-child(3) {
+    width: 21%;
+  }
+
+  .modal-detail-table th:nth-child(4),
+  .modal-detail-table td:nth-child(4) {
+    width: 14%;
+  }
+
+  .modal-detail-table th:nth-child(5),
+  .modal-detail-table td:nth-child(5) {
+    width: 18%;
+  }
+
+  .modal-detail-table th:nth-child(6),
+  .modal-detail-table td:nth-child(6) {
+    width: 17%;
+  }
+
+  .modal-rule {
+    width: min(100%, 1140px);
+    height: 3px;
+    margin: 34px auto 0;
+    background: #e1e1e1;
+  }
+
+  @media (max-width: 900px) {
+    .report-page {
+      margin: 0;
+      padding: 22px 18px;
+    }
+
+    .course-title,
+    .section-title {
+      font-size: 22px;
+    }
+
+    .filters-panel {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .info-summary {
+      min-height: 58px;
+      padding: 16px 18px;
+      font-size: 16px;
+    }
+
+    .info-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .info-panel-header,
+    .info-section {
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+
+    .info-section + .info-section {
+      border-top: 1px solid #e7ebef;
+      border-left: 0;
+    }
+
+    .info-list {
+      grid-template-columns: 1fr;
+    }
+
+    .filter-field input,
+    .filter-field select {
+      width: 100%;
+    }
+
+    .table-section {
+      margin-top: 42px;
+    }
+
+    .modal-overlay {
+      padding: 16px;
+    }
+
+    .modal-card {
+      width: calc(100vw - 32px);
+      max-height: calc(100vh - 32px);
+      padding: 42px 18px 46px;
+      border-radius: 12px;
+    }
+
+    .modal-close {
+      top: 14px;
+      right: 16px;
+      font-size: 36px;
+    }
+
+    .modal-course-title {
+      padding: 0 34px;
+    }
+
+    .modal-student {
+      margin-top: 36px;
+    }
+
+    .modal-table-wrap {
+      margin-top: 34px;
+    }
+
+    .modal-detail-table th {
+      font-size: 17px;
+    }
+
+    .modal-detail-table td {
+      font-size: 18px;
+    }
+
+    .deadline-progress {
+      height: 44px;
+    }
+
+    .deadline-segment {
+      font-size: 16px;
+    }
+
+    .deadline-segment[data-tooltip]::before {
+      width: 260px;
+      font-size: 14px;
+    }
+  }
+</style>
+  <link rel="stylesheet" href="/css/report-loader.css">
+</head>
+
+<body class="report-is-loading" data-report-role="teacher" data-report-version="pro">
+  <div id="report-loading-overlay" class="report-loading-overlay" role="status" aria-live="polite" aria-label="Cargando reporte de avance">
+    <div class="report-loading-content">
+      <img class="report-loading-image" src="/img/loading.gif" alt="Cargando reporte de avance">
+    </div>
+  </div>
+
+  <div class="lti-banner" role="banner" aria-label="Reporte de avance">
+    <img src="/img/banner-reporte-avance.png" alt="Reporte de avance">
+  </div>
+
+  <div class="report-page" role="main">
+    <h2 class="course-title">Cargando curso...</h2>
+    <p class="course-code">Código: ...</p>
+
+    <details class="info-panel" open>
+      <summary class="info-summary">
+        <span class="info-guide-icon" aria-hidden="true">📖</span>
+        <span>Guía de uso</span>
+      </summary>
+
+      <div class="info-content" aria-labelledby="reportInfoTitle">
+        <div class="info-panel-header">
+          <h3 id="reportInfoTitle">Qué muestra este reporte</h3>
+          <p class="info-lead">
+            Este reporte muestra el porcentaje de avance de cada estudiante según su ingreso a los contenidos de cada módulo.
+            El avance mostrado aquí <strong>no representa su desempeño académico</strong>, sino únicamente la interacción del alumno con los contenidos del curso.
+          </p>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-section">
+            <div class="audience-list">
+              <p class="audience-note"><strong>Materias en línea</strong>Este porcentaje sirve como referencia para asignar la asistencia. Los Requisitos del módulo vienen configurados de manera predeterminada por la DITE.</p>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h4>Cómo funciona</h4>
+            <ul class="info-list">
+              <li><strong>Exportación del reporte:</strong> botón para obtener la información en formato Excel (CSV).</li>
+              <li><strong>Buscador:</strong> permite filtrar la información por alumno o por módulo.</li>
+              <li><strong>Listado de estudiantes:</strong> muestra el ID y el nombre de todos los alumnos inscritos en la materia.</li>
+              <li><strong>Módulos:</strong> cada módulo del curso aparece en una columna independiente.</li>
+              <li><strong>Porcentaje de avance:</strong> muestra el total visualizado por el estudiante, sin importar si ocurrió antes o después del cierre.</li>
+              <li><strong>Advertencia:</strong> el ícono ⚠️ indica que una parte del avance se realizó antes del cierre y otra después.</li>
+              <li><strong>Detalle por estudiante:</strong> al hacer clic en cualquier porcentaje, se abre una ventana con avance al cierre, avance posterior al cierre, ítems vistos, pendientes y total de ítems.</li>
+              <li><strong>Correo al alumno:</strong> el botón ✉️ abre Gmail con el recordatorio y los datos de la tabla.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <div class="download-row">
+      <button class="btn-download" id="downloadCsv" type="button">
+        <span class="download-mark" aria-hidden="true">↓</span>
+        Exportar reporte
+      </button>
+    </div>
+
+    <div class="filters-panel" role="group" aria-label="Filtros de reporte">
+      <div class="filter-field">
+        <label for="studentSearch">Buscar Alumno</label>
+        <input id="studentSearch" type="search" placeholder="Escribe un nombre...">
+      </div>
+
+      <div class="filter-field">
+        <label for="moduleFilter">Módulo</label>
+        <select id="moduleFilter">
+          <option value="all">Todos los módulos</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-section" aria-labelledby="reportHeading">
+      <h2 class="section-title" id="reportHeading">Reporte de avance</h2>
+
+      <div class="table-scroll">
+        <table>
+          <thead id="reportHead"></thead>
+          <tbody id="reportBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="lti-footer" role="contentinfo" aria-label="Cierre LTI">
+    <img src="/img/banner-cierre-lti.png" alt="">
+  </div>
+
+  <div class="modal-overlay" id="progressModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalCourseTitle" aria-describedby="modalCode">
+      <button class="modal-close" id="modalClose" type="button" aria-label="Cerrar ventana">&times;</button>
+
+      <h2 class="modal-course-title" id="modalCourseTitle">Cargando curso...</h2>
+      <p class="modal-code" id="modalCode">Código: ...</p>
+      <p class="modal-student" id="modalStudent"></p>
+      <button class="mail-reminder-button" id="emailStudent" type="button" aria-label="Enviar correo por Gmail al alumno" title="Enviar correo por Gmail al alumno">✉️</button>
+
+      <div class="modal-table-wrap">
+        <table class="modal-detail-table">
+          <thead>
+            <tr>
+              <th>Módulo</th>
+              <th>Avance al cierre</th>
+              <th>Avance posterior al cierre</th>
+              <th>Ítems vistos</th>
+              <th>Ítems pendientes</th>
+              <th>Total de ítems</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td id="modalModule"></td>
+              <td id="modalProgressAtClose"></td>
+              <td id="modalProgressAfterClose"></td>
+              <td id="modalViewed"></td>
+              <td id="modalPending"></td>
+              <td id="modalTotal"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="deadline-bar-section" id="deadlineBarSection" aria-label="Barra de avance al cierre y posterior al cierre"></div>
+
+      <div class="modal-rule"></div>
+    </div>
+  </div>
+
+<script src="/js/report-teacher.js" defer></script>
+</body>
+</html>

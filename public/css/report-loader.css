@@ -1,0 +1,43 @@
+/* Pantalla de carga compartida por las cuatro vistas del reporte. */
+body.report-is-loading {
+  overflow: hidden;
+}
+
+.report-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.98);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 220ms ease, visibility 220ms ease;
+}
+
+.report-loading-overlay.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.report-loading-content {
+  display: grid;
+  place-items: center;
+  width: min(700px, 90vw);
+}
+
+.report-loading-image {
+  display: block;
+  width: clamp(420px, 38vw, 620px);
+  max-width: 100%;
+  height: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .report-loading-overlay {
+    transition: none;
+  }
+}
